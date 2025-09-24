@@ -1,0 +1,367 @@
+@page "/talento/{TalentoId:int}"
+@using Frontend.DtoClasses
+@using Frontend.DTOClasses
+@rendermode InteractiveServer
+@inject IJSRuntime JSRuntime
+@using Frontend.Services
+@inject TalentoHabilidadeService TalentoHabilidadeService
+@inject UtilizadorService UtilizadorService
+@inject TalentoService TalentoService
+@inject ExperienciaService ExperienciaService
+@inject HabilidadeService HabilidadeService
+
+<h3>Detalhes do Talento</h3>
+
+@if (talento == null)
+{
+    <p class="text-danger">O talento com o ID @TalentoId não foi encontrado.</p>
+}
+else
+{
+    <div class="card p-3 mb-3">
+        <h5>@talento.Nome</h5>
+        <p><strong>Email:</strong> @talento.Email</p>
+        <p><strong>País:</strong> @talento.Pais</p>
+        <p><strong>Preço por Hora:</strong> @talento.PrecoPorHora €</p>
+    </div>
+
+    <h4>Experiências</h4>
+    @if (experiencias == null || experiencias.Count == 0)
+    {
+        <p>Sem experiências registadas.</p>
+    }
+    else
+    {
+        <ul class="list-group">
+            @foreach (var exp in experiencias)
+            {
+                <li class="list-group-item">
+                    <strong>@exp.Titulo</strong> na <em>@exp.Empresa</em>
+                    <small><em>@exp.AnoInicio - @(exp.AnoFim.HasValue ? exp.AnoFim.Value.ToString() : "Presente")<span> (@CalcularDuracao(exp))</span></em></small>
+                </li>
+            }
+        </ul>
+    }
+    @if (!isLoading && (isAdmin || talento.UtilizadorId == UtilizadorIdLogado))
+    {
+        <button class="btn btn-success mt-3" @onclick="() => mostrarFormularioExperiencia = true">Criar Experiência</button>
+    }
+
+    <h4 class="mt-4">Habilidades</h4>
+    @if (habilidades == null || habilidades.Count == 0)
+    {
+        <p>Sem habilidades registadas.</p>
+    }
+    else
+    {
+        <ul class="list-group">
+            @foreach (var hab in habilidades)
+            {
+                <li class="list-group-item d-flex justify-content-between align-items-center">
+                    <div>
+                        <strong>@hab.NomeHabilidade</strong>
+                        <small class="ms-3">@hab.AnosExperiencia @(hab.AnosExperiencia == 1 ? "ano" : "anos") de experiência</small>
+                    </div>
+                    @if (!isLoading && (isAdmin || talento.UtilizadorId == UtilizadorIdLogado))
+                    {
+                        <div>
+                            <button class="btn btn-sm btn-warning me-2" @onclick="() => EditarHabilidade(hab)">Editar</button>
+                            <button class="btn btn-sm btn-danger" @onclick="() => RemoverHabilidade(hab.HabilidadeId)">Apagar</button>
+                        </div>
+                    }
+                </li>
+            }
+        </ul>
+    }
+    @if (!isLoading && (isAdmin || talento.UtilizadorId == UtilizadorIdLogado))
+    {
+        <button class="btn btn-success mt-3" @onclick="() => { editandoHabilidade = false; mostrarFormularioHabilidade = true; }">Adicionar Habilidade</button>
+    }
+
+    @if (mostrarFormularioExperiencia)
+    {
+        <div class="modal fade show" style="display: block;" tabindex="-1" role="dialog" aria-labelledby="experienciaModalTitle" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered" role="document">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="experienciaModalTitle">Nova Experiência</h5>
+                    </div>
+                    <div class="modal-body">
+                        <EditForm Model="novaExperiencia" OnValidSubmit="HandleExperienciaSubmit">
+                            <DataAnnotationsValidator />
+                            @if (!string.IsNullOrEmpty(validacaoMensagem))
+                            {
+                                <div class="alert alert-danger">
+                                    @validacaoMensagem
+                                </div>
+                            }
+                            <div class="mb-3">
+                                <label class="form-label">Título</label>
+                                <InputText class="form-control" @bind-Value="novaExperiencia.Titulo" />
+                                <ValidationMessage For="@(() => novaExperiencia.Titulo)" />
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label">Empresa</label>
+                                <InputText class="form-control" @bind-Value="novaExperiencia.Empresa" />
+                                <ValidationMessage For="@(() => novaExperiencia.Empresa)" />
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label">Ano Início</label>
+                                <InputNumber class="form-control" @bind-Value="novaExperiencia.AnoInicio" />
+                                <ValidationMessage For="@(() => novaExperiencia.AnoInicio)" />
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label">Ano Fim (opcional)</label>
+                                <InputNumber class="form-control" @bind-Value="novaExperiencia.AnoFim" />
+                                <ValidationMessage For="@(() => novaExperiencia.AnoFim)" />
+                            </div>
+                            
+                        </EditForm>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" @onclick="() => mostrarFormularioExperiencia = false">Cancelar</button>
+                        <button type="button" class="btn btn-success" @onclick="HandleExperienciaSubmit">Guardar</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+
+    @if (mostrarFormularioHabilidade)
+    {
+        <div class="modal fade show" style="display: block;" tabindex="-1" role="dialog" aria-labelledby="habilidadeModalTitle" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered" role="document">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="habilidadeModalTitle">@(editandoHabilidade ? "Editar" : "Nova") Habilidade</h5>
+                    </div>
+                    <div class="modal-body">
+                        <EditForm Model="novaHabilidade" OnValidSubmit="HandleHabilidadeSubmit">
+                            <DataAnnotationsValidator />
+                            @if (!string.IsNullOrEmpty(validacaoMensagemHabilidade))
+                            {
+                                <div class="alert alert-danger">
+                                    @validacaoMensagemHabilidade
+                                </div>
+                            }
+                            
+                            @if (!editandoHabilidade)
+                            {
+                                <div class="mb-3">
+                                    <label class="form-label">Habilidade</label>
+                                    <InputSelect class="form-select" @bind-Value="novaHabilidade.HabilidadeId">
+                                        <option value="0">Selecione uma habilidade</option>
+                                        @foreach (var hab in todasHabilidades)
+                                        {
+                                            <option value="@hab.Habilidadeid">@hab.Nome</option>
+                                        }
+                                    </InputSelect>
+                                    <ValidationMessage For="@(() => novaHabilidade.HabilidadeId)" />
+                                </div>
+                            }
+
+                            <div class="mb-3">
+                                <label class="form-label">Anos de Experiência</label>
+                                <InputNumber class="form-control" @bind-Value="novaHabilidade.AnosExperiencia"/>
+                                <ValidationMessage For="@(() => novaHabilidade.AnosExperiencia)"/>
+                            </div>
+                            
+                        </EditForm>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" @onclick="() => mostrarFormularioHabilidade = false">Cancelar</button>
+                        <button type="button" class="btn btn-success" @onclick="HandleHabilidadeSubmit">Guardar</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+}
+
+@code {
+    [Parameter]
+    public int TalentoId { get; set; }
+
+    private TalentoDTO? talento;
+    private List<ExperienciaDTO> experiencias = new();
+    private List<TalentoHabilidadeDTO> habilidades = new();
+    private List<HabilidadeDTO> todasHabilidades = new();
+    private string? validacaoMensagem;
+    private string? validacaoMensagemHabilidade;
+    private bool isAdmin = false;
+    private int? UtilizadorIdLogado;
+    private bool isLoading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        talento = await TalentoService.GetTalentoByIdAsync(TalentoId);
+        experiencias = await ExperienciaService.GetExperienciasByTalentoIdAsync(TalentoId);
+        await LoadHabilidades();
+        todasHabilidades = await HabilidadeService.GetAllHabilidadesAsync();
+    }
+    
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            UtilizadorIdLogado = await UtilizadorService.GetUserIdAsync();
+            isAdmin = await UtilizadorService.IsAdminAsync(); 
+            isLoading = false;  
+            StateHasChanged();
+        }
+    }
+    private async Task LoadHabilidades()
+    {
+        try
+        {
+            habilidades = await TalentoHabilidadeService.GetHabilidadesByTalentoIdAsync(TalentoId);
+        }
+        catch(Exception ex)
+        {
+            Console.WriteLine($"Erro ao carregar habilidades: {ex.Message}");
+            habilidades = new List<TalentoHabilidadeDTO>();
+        }
+    }
+
+    private string CalcularDuracao(ExperienciaDTO exp)
+    {
+        int fim = exp.AnoFim ?? DateTime.Now.Year;
+        int inicio = exp.AnoInicio;
+        int anos = fim - inicio;
+
+        if (anos <= 0)
+        {
+            return "<1 ano";
+        }
+        else if (anos == 1)
+        {
+            return "1 ano";
+        }
+        else
+        {
+            return $"{anos} anos";
+        }
+    }
+
+    // Experiência
+    private bool mostrarFormularioExperiencia = false;
+    private CreateExperienciaDTO novaExperiencia = new();
+
+    private async Task HandleExperienciaSubmit()
+    {
+        if (string.IsNullOrEmpty(novaExperiencia.Titulo) || string.IsNullOrEmpty(novaExperiencia.Empresa) || novaExperiencia.AnoInicio == 0)
+        {
+            validacaoMensagem = "Todos os campos obrigatórios devem ser preenchidos.";
+            return;
+        }
+        
+        if (novaExperiencia.AnoFim.HasValue && novaExperiencia.AnoFim <= novaExperiencia.AnoInicio)
+        {
+            validacaoMensagem = "A data de fim deve ser posterior à data de início.";
+            return;
+        }
+        
+        validacaoMensagem = null;
+
+        novaExperiencia.TalentoId = TalentoId;
+        var response = await ExperienciaService.CreateExperienciaAsync(novaExperiencia);
+        if (response.IsSuccessStatusCode)
+        {
+            experiencias = await ExperienciaService.GetExperienciasByTalentoIdAsync(TalentoId);
+            novaExperiencia = new();
+            mostrarFormularioExperiencia = false;
+        }
+        else
+        {
+            var errorMsg = await response.Content.ReadAsStringAsync();
+            validacaoMensagem = $"{errorMsg}";
+            Console.WriteLine("Erro ao criar experiência");
+        }
+    }
+
+    // Habilidade
+    private bool mostrarFormularioHabilidade = false;
+    private AddTalentoHabilidadeDTO novaHabilidade = new();
+    private bool editandoHabilidade = false;
+    private int habilidadeIdAtual = 0;
+
+    private void EditarHabilidade(TalentoHabilidadeDTO habilidade)
+    {
+        editandoHabilidade = true;
+        habilidadeIdAtual = habilidade.HabilidadeId;
+        novaHabilidade = new AddTalentoHabilidadeDTO
+        {
+            TalentoId = TalentoId,
+            HabilidadeId = habilidade.HabilidadeId,
+            AnosExperiencia = habilidade.AnosExperiencia
+        };
+        mostrarFormularioHabilidade = true;
+    }
+
+    private async Task RemoverHabilidade(int habilidadeId)
+    {
+        if (!await JSRuntime.InvokeAsync<bool>("confirm", new object[] { "Tem certeza que deseja remover esta habilidade?" }))
+            return;
+
+        var response = await TalentoHabilidadeService.RemoveHabilidadeFromTalentoAsync(TalentoId, habilidadeId);
+        if (response.IsSuccessStatusCode)
+        {
+            await LoadHabilidades();
+        }
+        else
+        {
+            var errorMsg = await response.Content.ReadAsStringAsync();
+            Console.WriteLine($"Erro ao remover habilidade: {errorMsg}");
+        }
+    }
+
+    private async Task HandleHabilidadeSubmit()
+    {
+        if (!editandoHabilidade && novaHabilidade.HabilidadeId == 0)
+        {
+            validacaoMensagemHabilidade = "Deve selecionar uma habilidade.";
+            return;
+        }
+        
+        if (novaHabilidade.AnosExperiencia < 0 || novaHabilidade.AnosExperiencia > 50)
+        {
+            validacaoMensagemHabilidade = "O número de anos de experiência deve estar entre 0 e 50.";
+            return;
+        }
+
+        validacaoMensagemHabilidade = null;
+        novaHabilidade.TalentoId = TalentoId;
+
+        HttpResponseMessage response;
+
+        if (editandoHabilidade)
+        {
+            var updateDto = new UpdateTalentoHabilidadeDTO
+            {
+                AnosExperiencia = novaHabilidade.AnosExperiencia
+            };
+            response = await TalentoHabilidadeService.UpdateTalentoHabilidadeAsync(TalentoId, habilidadeIdAtual, updateDto);
+        }
+        else
+        {
+            response = await TalentoHabilidadeService.AddHabilidadeToTalentoAsync(novaHabilidade);
+        }
+
+        if (response.IsSuccessStatusCode)
+        {
+            await LoadHabilidades();
+            novaHabilidade = new();
+            mostrarFormularioHabilidade = false;
+            editandoHabilidade = false;
+        }
+        else
+        {
+            var errorMsg = await response.Content.ReadAsStringAsync();
+            validacaoMensagemHabilidade = $"{errorMsg}";
+            Console.WriteLine($"Erro ao {(editandoHabilidade ? "atualizar" : "adicionar")} habilidade");
+        }
+    }
+}
