@@ -1,6 +1,6 @@
 # IT Talent Management System
 
-# Description
+![](assets/image.png)
 
 Complete talent management system for technology companies, developed in .NET 9 with 3-layer architecture. The system allows management of talents, job proposals, skills and average price reports.
 
@@ -223,7 +223,7 @@ dotnet publish -c Release
 - Input validation on all endpoints
 - CORS properly configured
 
-## Contributing
+# Contributing
 
 1. Fork the project
 2. Create a feature branch (`git checkout -b feature/AmazingFeature`)
@@ -231,11 +231,11 @@ dotnet publish -c Release
 4. Push to the branch (`git push origin feature/AmazingFeature`)
 5. Open a Pull Request
 
-## License
+# License
 
 This project is under the MIT license. See the `LICENSE` file for more details.
 
-## Authors
+# Authors
 
 - **Gonçalo Amorim** - [GitHub](https://github.com/goncaloam132)
 
